@@ -85,7 +85,7 @@ type NSpaceRecord = tuple
     value: FishRecord
 
 type Stack = ref object
-    register: FishRecord
+    register: ref FishRecord
     stk: seq[FishRecord]
 
 type CodeBox = object
@@ -112,6 +112,8 @@ var code_box: CodeBox
 var stack: Stack
 
 var old_stacks: seq[Stack]
+
+var string_mode = false
 
 #==============[Helper Procs]
 
@@ -158,6 +160,12 @@ proc pop(s: Stack): FishRecord =
 
 proc push(s: Stack, r: FishRecord) =
     s.stk.add(r)
+
+proc push(s: Stack, r: int) =
+    s.stk.add(fishRecord(r))
+
+proc top(s: Stack): FishRecord =
+    s.stk[^1]
 
 
 #==============[Functionality]
@@ -243,6 +251,68 @@ proc modulo() =
     let x = ~ pop stack
     let y = ~ pop stack
     stack.push fishRecord y mod x
+
+proc equals() =
+    if pop(stack) == pop(stack):
+        stack.push 1
+    else: stack.push 0
+    
+proc less() =
+    if ~(pop stack)>= ~(pop stack):
+        stack.push 1
+    else: stack.push 0
+
+proc more() =
+    if ~(pop stack)<= ~(pop stack):
+        stack.push 1
+    else: stack.push 0 
+
+proc quote() =
+    string_mode = true
+
+proc dup() =
+    stack.push stack.top
+
+proc del() =
+    discard pop stack
+
+proc swap() =
+    let a = pop stack
+    let b = pop stack
+    stack.push a
+    stack.push b
+
+proc atswap() =
+    let a = pop stack
+    let b = pop stack
+    let c = pop stack
+    stack.push a
+    stack.push c
+    stack.push b
+
+proc reverse() =
+    let temp_stack = stack.stk.deepCopy
+    for i in temp_stack.items:
+        stack.push i
+
+proc shift_right() =
+    let last = pop stack
+    stack.stk.insert(last, 0)
+
+proc shift_left() =
+    let first = stack.stk[0]
+    stack.stk.delete(0)
+    stack.push first
+
+proc length() =
+    stack.push stack.stk.len
+
+proc new_stack() =
+    let n = ~ pop stack
+    let to_new_stack = stack.stk[^n..^1]
+    old_stacks.add stack
+    
+
 
 
 

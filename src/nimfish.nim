@@ -22,6 +22,26 @@ func `***`(r: FishRecord): float =
 func `~`(r: FishRecord): int =
     r.numerator div r.denominator
 
+func `$*`(r: FishRecord): FishRecord =
+    if r.numerator mod r.denominator == 0:
+        return fishRecord(r.numerator div r.denominator)
+    else:
+        var i = 1
+        while i <= 5:
+            if r.denominator mod i == 0 and r.numerator mod i == 0:
+                return FishRecord(
+                    numerator: r.numerator div i,
+                    denominator: r.denominator div i
+                )
+
+func `==`(a: FishRecord, b: FishRecord): bool =
+    let a = $*a
+    let b = $*b
+    if a.numerator == b.numerator and a.denominator == b.denominator:
+        return true
+    else:
+        return ***a == ***b
+
 
 func `/`(a: FishRecord, b: FishRecord): FishRecord =
     FishRecord(
@@ -202,9 +222,27 @@ proc jump() =
 proc add() =
     let x = pop stack
     let y = pop stack
+    stack.push y + x
+
+proc divide() =
+    let x = pop stack
+    let y = pop stack
     stack.push y / x
 
+proc multiply() =
+    let x = pop stack
+    let y = pop stack
+    stack.push y * x
 
+proc subtract() =
+    let x = pop stack
+    let y = pop stack
+    stack.push y - x
+
+proc modulo() =
+    let x = ~ pop stack
+    let y = ~ pop stack
+    stack.push fishRecord y mod x
 
 
 

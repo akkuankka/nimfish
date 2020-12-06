@@ -1,10 +1,10 @@
 # This is just an example to get you started. A typical binary package
 # uses this file as the main entry point of the application.
-
-import nfio
-import sequtils
-import random
+import random, options, sugar, os, strutils
+from oids import hexbyte
 randomize()
+
+from algorithm import reversed
 
 #==============[Data Types]================
 
@@ -81,11 +81,12 @@ func `-`(a: FishRecord, b: FishRecord): FishRecord =
     
 
 type NSpaceRecord = tuple
-    coords: tuple[x: int64, y: int64]
+    coords: tuple[x: int, y: int]
     value: FishRecord
 
+
 type Stack = ref object
-    register: ref FishRecord
+    register: Option[FishRecord]
     stk: seq[FishRecord]
 
 type CodeBox = object
@@ -103,7 +104,7 @@ type Directions = enum
 var xy:
     tuple[x: int, y: int] = (0, 0)
 
-var current: char = ' '
+var current: char
 
 var direction = East
 
@@ -115,57 +116,22 @@ var old_stacks: seq[Stack]
 
 var string_mode = false
 
+var done: bool = false
+
+var already_moved = false
+
 #==============[Helper Procs]
 
 #this is a weird way of implementing this but it keeps things
 
-proc inc(n: int): int =
-    if current == '\n' and direction == East:
-        0
-    elif xy.y == code_box.natural_space.high():
-        0
-    else:
-        n + 1
-        
-proc dec(n: int): int =
-    if xy.x == 0 and direction == West:
-        code_box.natural_space[0].high
-    elif xy.y == 0 and direction == North:
-        code_box.natural_space.high
-    else: n - 1
+include helpers
 
-proc `>=>`(xy: var tuple[x: int, y: int]): void =
-    case direction
-    of East:
-        xy.x = inc xy.x
-    of North:
-        xy.y = dec xy.y
-    of South:
-        xy.y = inc xy.y
-    of West:
-        xy.x = dec xy.x
-
-proc jump(n: int) =
-    var i = -1
-    while i < n:
-        >=> xy
-        i += 1
-
-proc `|>`(c: tuple[x: int, y: int]) =
-    xy.x = c[0]
-    xy.y = c[1]
-
-proc pop(s: Stack): FishRecord =
-    pop(s.stk)
-
-proc push(s: Stack, r: FishRecord) =
-    s.stk.add(r)
-
-proc push(s: Stack, r: int) =
-    s.stk.add(fishRecord(r))
-
-proc top(s: Stack): FishRecord =
-    s.stk[^1]
+#[
+proc get_value_at(x: int, y: int): int =
+    if x >= 0 and y >= 0:
+        if x <= code_box.natural_space[0].high and y <= code_box.natural_space.high:
+            return int code_box.natural_space[y][x]
+        elif]#
 
 
 #==============[Functionality]
@@ -258,12 +224,12 @@ proc equals() =
     else: stack.push 0
     
 proc less() =
-    if ~(pop stack)>= ~(pop stack):
+    if ~(pop stack) >= ~(pop stack):
         stack.push 1
     else: stack.push 0
 
 proc more() =
-    if ~(pop stack)<= ~(pop stack):
+    if ~(pop stack) <= ~(pop stack):
         stack.push 1
     else: stack.push 0 
 
@@ -311,22 +277,194 @@ proc new_stack() =
     let n = ~ pop stack
     let to_new_stack = stack.stk[^n..^1]
     old_stacks.add stack
-    
+    stack = new Stack
+    stack.stk = to_new_stack
 
+proc back_stack() =
+    let to_old_stack = stack.stk
+    stack = pop old_stacks
+    stack.stk.add to_old_stack
 
+proc char_output() =
+    stdout.write char(~ pop stack)
+
+proc num_output() =
+    stdout.write $(*** pop stack)
+
+proc num_input() =
+    try:
+        stack.push stdin.readChar.int
+
+    except IOError:
+     stack.push -1
+
+proc registerise() =
+    if stack.register.isSome:
+        stack.push stack.register.get
+        stack.register = none(FishRecord)
+    else:
+        stack.register = some(pop stack)
+
+proc get_extern() =
+    let y = ~ stack.pop
+    let x = ~ stack.pop
+    stack.push code_box.get_value_at(x, y)
+
+proc push_extern() =
+    let y = ~ pop stack
+    let x = ~ pop stack
+    let v = ~ pop stack
+    code_box.push_char_at(x, y, v.char)
+
+proc terminate() = done = true
 
 
 
 
 #============[Interpretation]
+var sleep_time: int
+
+proc interpret(codelines: seq[string], initial_stack: seq[FishRecord] = @[], output_stack: bool) =
+    code_box = CodeBox(
+        natural_space: codelines
+        )
+    stack = new Stack
+    stack.stk.add initial_stack
+    xy = (0, 0)
+    direction = East
+    while not done:
+        sleep(sleep_time)
+        current = code_box.get_char_at(xy.x, xy.y)
+        if string_mode:
+            if current != '\'' or current != '"':
+                stack.push current.int
+            else:
+                string_mode = false
+            >=> xy
+        else:
+            case current
+            of '>': go East
+            of '<': go West
+            of '^': go North
+            of 'v': go South
+            of '/': up_mirror()
+            of '\\': down_mirror()
+            of '|': v_mirror()
+            of '_': h_mirror()
+            of '#': all_mirror()
+            of 'x': random_direction()
+            of '!': trampoline()
+            of '?': conditional_trampoline()
+            of '.': jump()
+            of '+': add()
+            of '-': subtract()
+            of '*': multiply()
+            of ',': divide()
+            of '%': modulo()
+            of '=': equals()
+            of ')': more()
+            of '(': less()
+            of '\'', '"': quote()
+            of ':': dup()
+            of '~': del()
+            of '$': swap()
+            of '@': atswap()
+            of '}': shift_right()
+            of '{': shift_left()
+            of 'r': reverse()
+            of 'l': length()
+            of '[': new_stack()
+            of ']': back_stack()
+            of 'o': char_output()
+            of 'n': num_output()
+            of 'i': num_input()
+            of '&': registerise()
+            of 'g': get_extern()
+            of 'p': push_extern()
+            of ';': terminate()
+            of ' ': discard
+            else:
+                if current in {'a'..'f', '0' .. '9'}:
+                    stack.push current.hexbyte.fishRecord
+                else: echo "something smells fishy ..."
+
+            if output_stack:
+                if stack.register.isSome:
+                    echo "Register:", $ *** stack.register.get
+                echo     "Stack: ============================="
+                for i, r in stack.stk.reversed.pairs:
+                    echo "      ", ("|" & ($(*** r))
+                                            .digits(7)
+                                            .center(7) & "|")
+                                        .center(29)
+
+            if not already_moved: >=> xy
+        
+
+
+proc display_help() =
+    echo """
+    Usage: nimfish [args] <file>
+        Args:
+        | --code="x"    execute the code supplied in "x"
+        | -h            display this message
+        | -i            initialise the stack with values (integers with comma separators)
+        | -s            output the stack each tick
+        | -t            time to sleep between ticks in ms       
+    """
    
 #====================[Main]
 when isMainModule:
-    import os
-    
+    import parseopt
+    var code: string
+    var received_code = false
+    var output_stack = false
+    var stack_initialised = false
+    var initial_stack: string
 
-    let code = if paramCount() > 0: readFile paramStr(1)
-             else: readAll stdin
+    var p = initOptParser(shortNoVal = {'h', 's'})
+    while true:
+        p.next()
+        case p.kind 
+        of cmdEnd: break
+        of cmdShortOption:
+            case p.key 
+            of "h": display_help()
+            of "s": output_stack = true
+            of "t": 
+                sleep_time = 
+                    try: parseInt(p.val)
+                    except ValueError:
+                        echo "That doesn't look like a number"
+                        0
+            of "i": 
+                initial_stack = p.val
+                stack_initialised = true 
+            else: discard
+        of cmdLongOption:
+            case p.key
+            of "code": 
+                code = p.val
+                received_code = true
+            else: discard
+        of cmdArgument:
+            if not received_code:
+                received_code = true
+                code = readFile p.key
+        
+        var code = code.splitLines
+        
+        if stack_initialised:
+            var initial_stack = collect(newSeq):
+                for i in initial_stack.split(","):
+                    i.parseInt.fishRecord
+            interpret(code, initial_stack ,output_stack)
+        else:
+            interpret(code, output_stack=output_stack)        
+        
+
+        
+    
 
   
 

@@ -120,6 +120,10 @@ var done: bool = false
 
 var already_moved = false
 
+var is_cumulative = false
+
+var debug_mode = false
+
 #==============[Helper Procs]
 
 #this is a weird way of implementing this but it keeps things
@@ -255,11 +259,9 @@ proc atswap() =
     stack.push a
     stack.push c
     stack.push b
-
+import algorithm
 proc reverse() =
-    let temp_stack = stack.stk.deepCopy
-    for i in temp_stack.items:
-        stack.push i
+    stack.stk.reverse
 
 proc shift_right() =
     let last = pop stack
@@ -285,11 +287,22 @@ proc back_stack() =
     stack = pop old_stacks
     stack.stk.add to_old_stack
 
+var cumulative_o: seq[string] = @[]
+
 proc char_output() =
-    stdout.write char(~ pop stack)
+    if is_cumulative:
+        cumulative_o.add $char(~ pop stack)
+        echo cumulative_o.join " "
+    else:
+        stdout.write char(~ pop stack)
 
 proc num_output() =
-    stdout.write $(*** pop stack)
+    if is_cumulative:
+        cumulative_o.add $(*** pop stack)
+        echo cumulative_o.join " "
+    else:
+        #echo "wrote"
+        stdout.write $(*** pop stack)
 
 proc num_input() =
     try:
@@ -333,13 +346,28 @@ proc interpret(codelines: seq[string], initial_stack: seq[FishRecord] = @[], out
     xy = (0, 0)
     direction = East
     while not done:
+        already_moved = false
         sleep(sleep_time)
+        if output_stack:
+                if stack.register.isSome:
+                    echo "Register:", $ *** stack.register.get
+                echo     "Stack: ============================="
+                for i, r in stack.stk.reversed.pairs:
+                    echo "      ", ("|" & ($(*** r))
+                                            .digits(7)
+                                            .center(7) & "|")
+                                        .center(29)
         current = code_box.get_char_at(xy.x, xy.y)
+        if debug_mode: 
+            echo "currently doing ", current
+            echo "currently at ", $xy
+            if string_mode: echo "quoting"
         if string_mode:
-            if current != '\'' or current != '"':
-                stack.push current.int
-            else:
+            if current == '\'' or current == '"':
                 string_mode = false
+                
+            else:
+                stack.push current.int
             >=> xy
         else:
             case current
@@ -386,17 +414,11 @@ proc interpret(codelines: seq[string], initial_stack: seq[FishRecord] = @[], out
             else:
                 if current in {'a'..'f', '0' .. '9'}:
                     stack.push current.hexbyte.fishRecord
-                else: echo "something smells fishy ..."
+                else: 
+                    echo "something smells fishy ..."
+                    echo "the character is " & repr(current)
 
-            if output_stack:
-                if stack.register.isSome:
-                    echo "Register:", $ *** stack.register.get
-                echo     "Stack: ============================="
-                for i, r in stack.stk.reversed.pairs:
-                    echo "      ", ("|" & ($(*** r))
-                                            .digits(7)
-                                            .center(7) & "|")
-                                        .center(29)
+            
 
             if not already_moved: >=> xy
         
@@ -410,7 +432,9 @@ proc display_help() =
         | -h            display this message
         | -i            initialise the stack with values (integers with comma separators)
         | -s            output the stack each tick
-        | -t            time to sleep between ticks in ms       
+        | -t            time to sleep between ticks in ms
+        | -d            prints the current operation every tick
+        | --cumulative  the output contains everything the program has output       
     """
    
 #====================[Main]
@@ -422,15 +446,20 @@ when isMainModule:
     var stack_initialised = false
     var initial_stack: string
 
-    var p = initOptParser(shortNoVal = {'h', 's'})
+    var p = initOptParser(shortNoVal = {'h', 's'}, longNoVal = @["cumulative"])
     while true:
         p.next()
+
         case p.kind 
         of cmdEnd: break
         of cmdShortOption:
             case p.key 
-            of "h": display_help()
-            of "s": output_stack = true
+            of "h": 
+                display_help()
+                break
+            of "s":
+            
+                output_stack = true
             of "t": 
                 sleep_time = 
                     try: parseInt(p.val)
@@ -439,28 +468,35 @@ when isMainModule:
                         0
             of "i": 
                 initial_stack = p.val
-                stack_initialised = true 
+                stack_initialised = true
+            of "d":
+                debug_mode = true 
             else: discard
         of cmdLongOption:
             case p.key
             of "code": 
                 code = p.val
                 received_code = true
+            of "cumulative":
+                is_cumulative = true
             else: discard
         of cmdArgument:
             if not received_code:
                 received_code = true
                 code = readFile p.key
         
-        var code = code.splitLines
+    var seqcode: seq[string] = code
+                                .splitLines(keepEol = false)
+                                .normalise()
         
-        if stack_initialised:
-            var initial_stack = collect(newSeq):
-                for i in initial_stack.split(","):
-                    i.parseInt.fishRecord
-            interpret(code, initial_stack ,output_stack)
-        else:
-            interpret(code, output_stack=output_stack)        
+    if stack_initialised:
+        var initial_stack = collect(newSeq):
+            for i in initial_stack.split(","):
+                i.parseInt.fishRecord
+
+        interpret(seqcode, initial_stack ,output_stack)
+    else:
+        interpret(seqcode, output_stack=output_stack)        
         
 
         

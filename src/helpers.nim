@@ -1,29 +1,43 @@
-proc inc(n: int): int =
-    if current == '\n' and direction == East:
+proc incx(n: int): int =
+    if xy.x == code_box.natural_space[0].high  and direction == East:
+        if debug_mode: echo "Yoink"
         0
-    elif xy.y == code_box.natural_space.high():
+
+    else:
+        n + 1
+
+proc incy(n: int): int =
+    if xy.y == code_box.natural_space.high():
         0
     else:
         n + 1
         
-proc dec(n: int): int =
+proc decx(n: int): int =
     if xy.x == 0 and direction == West:
         code_box.natural_space[0].high
-    elif xy.y == 0 and direction == North:
+    else: n - 1
+
+proc decy(n: int): int =
+    if xy.y == 0 and direction == North:
         code_box.natural_space.high
     else: n - 1
 
-proc `>=>`(xy: var tuple[x: int, y: int]): void =
+proc `>=>`(xy: var tuple[x: int, y: int]) =
+    
     already_moved = true
     case direction
     of East:
-        xy.x = inc xy.x
+
+        xy.x = incx xy.x
     of North:
-        xy.y = dec xy.y
+ 
+        xy.y = decy xy.y
     of South:
-        xy.y = inc xy.y
+
+        xy.y = incy xy.y
     of West:
-        xy.x = dec xy.x
+
+        xy.x = decx xy.x
 
 proc jump(n: int) =
     var i = -1
@@ -37,12 +51,15 @@ proc `|>`(c: tuple[x: int, y: int]) =
     xy.y = c[1]
 
 proc pop(s: Stack): FishRecord =
+    #echo "popped off ", $(*** s.stk[^1])
     pop(s.stk)
 
 proc push(s: Stack, r: FishRecord) =
+    #echo "pushed ", $(***r)
     s.stk.add(r)
 
 proc push(s: Stack, r: int) =
+    #echo "pushed ", $r
     s.stk.add(fishRecord(r))
 
 proc top(s: Stack): FishRecord =
@@ -98,3 +115,11 @@ proc digits(s: string, x: Natural): string =
         s
     else:
         s[0..x]
+
+proc normalise(s: seq[string]): seq[string] =
+    result = s
+    let length = result[0].len
+    for i, l in result[1..^1].pairs:
+        result[i + 1] = l.alignLeft(length)
+
+    #echo $result
